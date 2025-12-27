@@ -1,0 +1,88 @@
+# 🚫 .gitignore - Các file không nên commit
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ===== Virtual Environment =====
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# ===== Testing =====
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+.hypothesis/
+*.cover
+.nox/
+
+# ===== Project Specific =====
+data/raw/*.csv
+data/processed/*.csv
+assets/*.png
+logs/*.log
+temp/
+*.tmp
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ===== Secrets =====
+.env.local
+.env.*.local
+secrets.json
+config.local.py
+
+# ===== Backups =====
+*.bak
+*.backup
+*.old
+*~
+
+# ===== Temporary =====
+*.tmp
+*.temp
+*.[0-9]
+
+# Ngoại lệ
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!assets/.gitkeep
+!logs/.gitkeep

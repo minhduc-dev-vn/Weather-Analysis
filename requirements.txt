@@ -1,0 +1,5 @@
+requests>=2.28.0          # Gửi HTTP request tới API
+pandas>=1.5.0             # Xử lý và phân tích dữ liệu
+matplotlib>=3.6.0         # Vẽ biểu đồ và trực quan hóa
+numpy>=1.23.0             # Tính toán số học (qua pandas)
+Pillow>=9.0.0             # Xử lý ảnh trong GUI
