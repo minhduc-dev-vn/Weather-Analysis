@@ -1,4 +1,16 @@
 # src/config.py
+"""
+Module cấu hình chính cho ứng dụng Weather Forecast Pro.
+
+Chứa:
+    - API configuration
+    - Danh sách thành phố
+    - Path helpers
+
+Author: Weather Forecast Pro Team
+Date: 2025-12-27
+"""
+
 import os
 from typing import Dict, List
 
@@ -17,7 +29,6 @@ VIETNAM_CITIES = {
     "Cần Thơ": "Can Tho",
     "Nha Trang": "Nha Trang",
     "Huế": "Hue",
-    "Vũng Tàu": "Vung Tau",
     "Quy Nhon": "Quy Nhon",
     "Phan Thiet": "Phan Thiet",
     "Đà Lạt": "Da Lat",

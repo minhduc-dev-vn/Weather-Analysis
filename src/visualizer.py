@@ -6,20 +6,92 @@ Chức năng:
     - Vẽ biểu đồ kết hợp (Nhiệt độ + Độ ẩm)
     - Vẽ histogram phân bố nhiệt độ
     - Vẽ biểu đồ tốc gió
-    - Tính toán và hiển thị thống kê
 
 Author: Weather Forecast Pro Team
-Date: 2025-12-27
+Date: 2025-12-27 (Refactored for code quality)
 """
 
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')  # Set backend không tương tác để tránh conflict với threading
+matplotlib.use('Agg')  # Backend không tương tác
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 from typing import Optional
+from matplotlib.patches import Patch
+
 from .config import DEFAULT_CITY_VIET, get_processed_data_path, get_chart_path
+from .constants import (
+    DEFAULT_FIGSIZE, SMALL_FIGSIZE, DEFAULT_DPI,
+    COLOR_TEMPERATURE, COLOR_HUMIDITY, COLOR_WIND, COLOR_GAUSSIAN, COLOR_GRID,
+    HISTOGRAM_BINS, HISTOGRAM_ALPHA,
+    MAX_TIME_POINTS_DISPLAY,
+    LINE_WIDTH_DEFAULT, LINE_WIDTH_THICK, FONT_SIZE_TICK, FONT_SIZE_LEGEND
+)
+from .column_names import CleanColumns
+from .exceptions import FileOperationError, ChartGenerationError, EmptyDataFrameError
+from .logger import get_logger, log_success, log_error, log_warning, log_info
+from .plot_helpers import (
+    create_figure, format_plot_labels, format_secondary_axis_labels,
+    save_plot_with_config, rotate_xlabels, add_legend, setup_tight_layout
+)
+
+
+# Logger cho module này
+logger = get_logger(__name__)
+
+
+def _load_processed_data(filepath: str) -> pd.DataFrame:
+    """
+    Đọc dữ liệu đã processed và chuyển đổi thời gian.
+    
+    Args:
+        filepath: Đường dẫn file processed data
+        
+    Returns:
+        pd.DataFrame: DataFrame với thời gian đã converted
+        
+    Raises:
+        FileOperationError: Nếu file không tồn tại hoặc không đọc được
+        EmptyDataFrameError: Nếu DataFrame rỗng
+    """
+    if not os.path.exists(filepath):
+        error_msg = f"Chưa có dữ liệu sạch. Vui lòng cập nhật dữ liệu từ API trước"
+        log_error(error_msg, logger)
+        raise FileOperationError(error_msg, filepath)
+    
+    try:
+        df = pd.read_csv(filepath)
+        
+        if len(df) == 0:
+            error_msg = "Dữ liệu trống"
+            log_error(error_msg, logger)
+            raise EmptyDataFrameError(error_msg)
+        
+        df[CleanColumns.THOI_GIAN.value] = pd.to_datetime(df[CleanColumns.THOI_GIAN.value])
+        return df
+        
+    except pd.errors.ParserError as e:
+        error_msg = f"Lỗi parse CSV: {e}"
+        log_error(error_msg, logger)
+        raise FileOperationError(error_msg, filepath) from e
+
+
+def _validate_column_exists(df: pd.DataFrame, column: str) -> None:
+    """
+    Kiểm tra cột tồn tại trong DataFrame.
+    
+    Args:
+        df: DataFrame cần kiểm tra
+        column: Tên cột cần kiểm tra
+        
+    Raises:
+        ChartGenerationError: Nếu cột không tồn tại
+    """
+    if column not in df.columns:
+        error_msg = f"Không tìm thấy cột '{column}'. Các cột hiện có: {df.columns.tolist()}"
+        log_error(error_msg, logger)
+        raise ChartGenerationError(error_msg)
 
 
 def create_weather_chart(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[str]:
@@ -32,10 +104,6 @@ def create_weather_chart(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[st
     Returns:
         Optional[str]: Đường dẫn file ảnh nếu thành công, None nếu thất bại
         
-    Raises:
-        FileNotFoundError: File dữ liệu sạch không tồn tại
-        Exception: Các lỗi khác
-        
     Note:
         - Hiển thị 12 mốc thời gian đầu tiên (48 giờ)
         - Sử dụng 2 trục Y để so sánh hai đại lượng
@@ -44,70 +112,144 @@ def create_weather_chart(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[st
     processed_data_path = get_processed_data_path(city_name_viet)
     chart_path = get_chart_path(city_name_viet, "main")
     
-    # ===== KIỂM TRA FILE =====
-    if not os.path.exists(processed_data_path):
-        print(f"⚠️ Chưa có dữ liệu sạch để vẽ cho {city_name_viet}")
-        print("💡 Vui lòng cập nhật dữ liệu từ API trước")
-        return None
-
-    print(f"📊 Đang vẽ biểu đồ thời tiết (Nhiệt độ & Độ ẩm) cho {city_name_viet}...")
+    logger.info(f"📊 Đang vẽ biểu đồ thời tiết (Nhiệt độ & Độ ẩm) cho {city_name_viet}...")
     
     try:
-        # ===== ĐỌC DỮ LIỆU =====
-        df = pd.read_csv(processed_data_path)
+        # Load data
+        df = _load_processed_data(processed_data_path)
         
-        if len(df) == 0:
-            print("❌ LỖI: Dữ liệu trống")
-            return None
+        # Validate columns
+        _validate_column_exists(df, CleanColumns.NHIET_DO.value)
+        _validate_column_exists(df, CleanColumns.DO_AM.value)
         
-        df['Thời Gian'] = pd.to_datetime(df['Thời Gian'])
-        df_plot = df.head(12)  # Lấy 12 mốc đầu (48 giờ)
+        # Lấy dữ liệu để plot
+        df_plot = df.head(MAX_TIME_POINTS_DISPLAY)
         
-        # ===== VẼ BIỂU ĐỒ =====
-        fig, ax1 = plt.subplots(figsize=(12, 6))
+        # Tạo figure với background màu
+        fig, ax1 = create_figure(figsize=DEFAULT_FIGSIZE)
+        fig.patch.set_facecolor('#FAFAFA')  # Background xám rất nhạt
+        ax1.set_facecolor('#FFFFFF')  # Plot area trắng
         
-        # --- Trục 1: Nhiệt độ (Đường màu đỏ) ---
-        color_temp = 'tab:red'
-        ax1.set_xlabel('Thời Gian (Dự báo 3h/lần)', fontsize=11, fontweight='bold')
-        ax1.set_ylabel('Nhiệt Độ (°C)', color=color_temp, fontsize=12, fontweight='bold')
-        line = ax1.plot(df_plot['Thời Gian'], df_plot['Nhiệt Độ'], 
-                       color=color_temp, marker='o', linewidth=2.5, 
-                       markersize=6, label='Nhiệt Độ')
-        ax1.tick_params(axis='y', labelcolor=color_temp)
-        ax1.grid(True, linestyle='--', alpha=0.5)
+        # Trục 1: Nhiệt độ (đường với shadow)
+        # Vẽ shadow trước
+        ax1.plot(
+            df_plot[CleanColumns.THOI_GIAN.value],
+            df_plot[CleanColumns.NHIET_DO.value],
+            color='#CCCCCC',
+            linewidth=LINE_WIDTH_DEFAULT + 1.5,
+            alpha=0.3,
+            zorder=1
+        )
         
-        # --- Trục 2: Độ ẩm (Cột màu xanh) ---
+        # Vẽ line chính
+        line1 = ax1.plot(
+            df_plot[CleanColumns.THOI_GIAN.value],
+            df_plot[CleanColumns.NHIET_DO.value],
+            color=COLOR_TEMPERATURE,
+            marker='o',
+            linewidth=LINE_WIDTH_DEFAULT,
+            markersize=8,
+            markerfacecolor=COLOR_TEMPERATURE,
+            markeredgecolor='white',
+            markeredgewidth=2,
+            label='🌡️ Nhiệt Độ',
+            zorder=3,
+            linestyle='-',
+            antialiased=True
+        )
+        
+        # Fill area dưới đường nhiệt độ
+        ax1.fill_between(
+            df_plot[CleanColumns.THOI_GIAN.value],
+            df_plot[CleanColumns.NHIET_DO.value],
+            alpha=0.1,
+            color=COLOR_TEMPERATURE,
+            zorder=1
+        )
+        
+        ax1.tick_params(axis='y', labelcolor=COLOR_TEMPERATURE, labelsize=FONT_SIZE_TICK)
+        ax1.spines['left'].set_color(COLOR_TEMPERATURE)
+        ax1.spines['left'].set_linewidth(2)
+        
+        # Trục 2: Độ ẩm (cột với gradient effect)
         ax2 = ax1.twinx()
-        color_hum = 'tab:blue'
-        ax2.set_ylabel('Độ Ẩm (%)', color=color_hum, fontsize=12, fontweight='bold')
-        bar = ax2.bar(df_plot['Thời Gian'], df_plot['Độ Ẩm'], 
-                     color=color_hum, alpha=0.3, width=0.5, label='Độ Ẩm')
-        ax2.tick_params(axis='y', labelcolor=color_hum)
+        bars = ax2.bar(
+            df_plot[CleanColumns.THOI_GIAN.value],
+            df_plot[CleanColumns.DO_AM.value],
+            color=COLOR_HUMIDITY,
+            alpha=0.5,
+            width=0.02,  # Giảm từ 0.08 để không che khuất đường nhiệt độ
+            label='💧 Độ Ẩm',
+            edgecolor='white',
+            linewidth=0.5,
+            zorder=2
+        )
         
-        # ===== TRANG TRÍ =====
-        plt.title(f'📊 Dự báo Thời tiết: Nhiệt độ & Độ ẩm (48 giờ) - {city_name_viet}', 
-                 fontsize=14, fontweight='bold', pad=20)
+        # Gradient effect cho bars
+        for i, bar in enumerate(bars):
+            height = bar.get_height()
+            bar.set_facecolor(COLOR_HUMIDITY)
+            bar.set_alpha(0.5 + (height / df_plot[CleanColumns.DO_AM.value].max()) * 0.3)
         
-        # Xoay nhãn trục X để dễ đọc
-        fig.autofmt_xdate(rotation=45, ha='right')
+        ax2.tick_params(axis='y', labelcolor=COLOR_HUMIDITY, labelsize=FONT_SIZE_TICK)
+        ax2.spines['right'].set_color(COLOR_HUMIDITY)
+        ax2.spines['right'].set_linewidth(2)
         
-        # Thêm legend
+        # Format labels với style đẹp hơn
+        format_plot_labels(
+            ax1,
+            title=f'📊 Dự báo Thời tiết: Nhiệt độ & Độ ẩm (48 giờ)\n{city_name_viet}',
+            xlabel='⏰ Thời Gian (Dự báo 3h/lần)',
+            ylabel='🌡️ Nhiệt Độ (°C)',
+            enable_grid=True
+        )
+        
+        format_secondary_axis_labels(
+            ax2,
+            ylabel='💧 Độ Ẩm (%)'
+        )
+        
+        # Grid đẹp hơn
+        ax1.grid(True, alpha=0.2, linestyle=':', linewidth=1, color=COLOR_GRID, zorder=0)
+        ax1.set_axisbelow(True)
+        
+        # Xoay labels và tạo spacing tốt hơn
+        rotate_xlabels(ax1, rotation=30)
+        
+        # Legend đẹp hơn với shadow
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+        legend = ax1.legend(
+            lines1 + lines2, 
+            labels1 + labels2, 
+            loc='upper left',
+            fontsize=FONT_SIZE_LEGEND,
+            framealpha=0.95,
+            edgecolor='#DDDDDD',
+            fancybox=True,
+            shadow=True
+        )
         
-        # ===== LƯU FILE =====
-        os.makedirs(os.path.dirname(chart_path), exist_ok=True)
-        plt.tight_layout()
-        plt.savefig(chart_path, dpi=100, bbox_inches='tight')
-        plt.close()
+        # Border đẹp hơn
+        for spine in ax1.spines.values():
+            if spine not in [ax1.spines['left']]:
+                spine.set_linewidth(1.5)
+                spine.set_color('#DDDDDD')
         
-        print(f"✅ Đã lưu biểu đồ: {chart_path}")
+        # Lưu file với DPI cao hơn
+        setup_tight_layout(fig)
+        save_plot_with_config(fig, chart_path, dpi=DEFAULT_DPI)
+        
         return chart_path
         
+    except (FileOperationError, ChartGenerationError, EmptyDataFrameError) as e:
+        logger.error(f"Lỗi khi vẽ biểu đồ: {e}")
+        plt.close('all')
+        return None
+        
     except Exception as e:
-        print(f"❌ LỖI vẽ biểu đồ: {e}")
-        plt.close()
+        log_error(f"Lỗi không xác định khi vẽ biểu đồ: {e}", logger, exc_info=True)
+        plt.close('all')
         return None
 
 
@@ -129,60 +271,75 @@ def create_temperature_histogram(city_name_viet: str = DEFAULT_CITY_VIET) -> Opt
     processed_data_path = get_processed_data_path(city_name_viet)
     chart_path = get_chart_path(city_name_viet, "histogram")
     
-    if not os.path.exists(processed_data_path):
-        print(f"⚠️ Chưa có dữ liệu để vẽ histogram cho {city_name_viet}")
-        return None
-
-    print(f"📊 Đang vẽ biểu đồ histogram (phân bố nhiệt độ) cho {city_name_viet}...")
+    logger.info(f"📊 Đang vẽ histogram phân bố nhiệt độ cho {city_name_viet}...")
     
     try:
-        df = pd.read_csv(processed_data_path)
+        # Load data
+        df = _load_processed_data(processed_data_path)
+        _validate_column_exists(df, CleanColumns.NHIET_DO.value)
         
-        # Validate column
-        if 'Nhiệt Độ' not in df.columns:
-            print(f"❌ Không tìm thấy cột 'Nhiệt Độ'")
-            print(f"   Các cột có sẵn: {df.columns.tolist()}")
-            return None
+        # Tạo figure
+        fig, ax = create_figure(figsize=SMALL_FIGSIZE)
         
-        fig, ax = plt.subplots(figsize=(10, 6))
+        # Vẽ histogram
+        n, bins, patches = ax.hist(
+            df[CleanColumns.NHIET_DO.value],
+            bins=HISTOGRAM_BINS,
+            color=COLOR_TEMPERATURE,
+            alpha=HISTOGRAM_ALPHA,
+            edgecolor='black',
+            linewidth=1.5
+        )
         
-        # ===== VẼ HISTOGRAM =====
-        n, bins, patches = ax.hist(df['Nhiệt Độ'], bins=10, color='tab:red', 
-                                    alpha=0.7, edgecolor='black', linewidth=1.5)
+        # Thêm đường cong Gaussian
+        mu = df[CleanColumns.NHIET_DO.value].mean()
+        sigma = df[CleanColumns.NHIET_DO.value].std()
+        x = np.linspace(
+            df[CleanColumns.NHIET_DO.value].min(),
+            df[CleanColumns.NHIET_DO.value].max(),
+            100
+        )
+        gaussian = (
+            len(df) * (bins[1] - bins[0]) / np.sqrt(2 * np.pi * sigma**2) *
+            np.exp(-(x - mu)**2 / (2 * sigma**2))
+        )
+        ax.plot(x, gaussian, color=COLOR_GAUSSIAN, linewidth=LINE_WIDTH_DEFAULT, label='Đường Gaussian')
         
-        # ===== THÊM ĐƯỜNG CONG GAUSSIAN =====
-        mu, sigma = df['Nhiệt Độ'].mean(), df['Nhiệt Độ'].std()
-        x = np.linspace(df['Nhiệt Độ'].min(), df['Nhiệt Độ'].max(), 100)
-        gaussian = (len(df) * (bins[1] - bins[0]) / np.sqrt(2 * np.pi * sigma**2) * 
-                   np.exp(-(x - mu)**2 / (2 * sigma**2)))
-        ax.plot(x, gaussian, 'b-', linewidth=2.5, label='Đường Gaussian')
+        # Format labels
+        format_plot_labels(
+            ax,
+            title=f'📈 Phân bố Nhiệt độ - {city_name_viet}',
+            xlabel='Nhiệt Độ (°C)',
+            ylabel='Số lần xuất hiện'
+        )
         
-        # ===== TRANG TRÍ =====
-        ax.set_xlabel('Nhiệt Độ (°C)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Số lần xuất hiện', fontsize=12, fontweight='bold')
-        ax.set_title(f'📈 Phân bố Nhiệt độ - {city_name_viet}', fontsize=14, fontweight='bold', pad=20)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        
-        # ===== THÊM THỐNG KÊ =====
+        # Thêm thống kê
         stats_text = f'μ = {mu:.1f}°C\nσ = {sigma:.1f}°C'
-        ax.text(0.98, 0.97, stats_text, transform=ax.transAxes, 
-               fontsize=11, verticalalignment='top', horizontalalignment='right',
-               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        ax.text(
+            0.98, 0.97, stats_text,
+            transform=ax.transAxes,
+            fontsize=11,
+            verticalalignment='top',
+            horizontalalignment='right',
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+        )
         
-        ax.legend(fontsize=10)
+        add_legend(ax)
         
-        # ===== LƯU FILE =====
-        os.makedirs(os.path.dirname(chart_path), exist_ok=True)
-        plt.tight_layout()
-        plt.savefig(chart_path, dpi=100, bbox_inches='tight')
-        plt.close()
+        # Lưu file
+        setup_tight_layout(fig)
+        save_plot_with_config(fig, chart_path, dpi=DEFAULT_DPI)
         
-        print(f"✅ Đã lưu histogram: {chart_path}")
         return chart_path
         
+    except (FileOperationError, ChartGenerationError, EmptyDataFrameError) as e:
+        logger.error(f"Lỗi khi vẽ histogram: {e}")
+        plt.close('all')
+        return None
+        
     except Exception as e:
-        print(f"❌ LỖI vẽ histogram: {e}")
-        plt.close()
+        log_error(f"Lỗi không xác định khi vẽ histogram: {e}", logger, exc_info=True)
+        plt.close('all')
         return None
 
 
@@ -200,67 +357,74 @@ def create_wind_speed_chart(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional
     processed_data_path = get_processed_data_path(city_name_viet)
     chart_path = get_chart_path(city_name_viet, "wind")
     
-    if not os.path.exists(processed_data_path):
-        print(f"⚠️ Chưa có dữ liệu để vẽ biểu đồ tốc gió cho {city_name_viet}")
-        return None
-
-    print(f"📊 Đang vẽ biểu đồ tốc gió cho {city_name_viet}...")
+    logger.info(f"📊 Đang vẽ biểu đồ tốc gió cho {city_name_viet}...")
     
     try:
-        df = pd.read_csv(processed_data_path)
-        df['Thời Gian'] = pd.to_datetime(df['Thời Gian'])
+        # Load data
+        df = _load_processed_data(processed_data_path)
+        _validate_column_exists(df, CleanColumns.TOC_GIO.value)
         
-        # Validate column
-        if 'Tốc Gió' not in df.columns:
-            print(f"❌ Không tìm thấy cột 'Tốc Gió'")
-            print(f"   Các cột có sẵn: {df.columns.tolist()}")
-            return None
+        df_plot = df.head(MAX_TIME_POINTS_DISPLAY)
         
-        df_plot = df.head(12)
+        # Tạo figure
+        fig, ax = create_figure(figsize=DEFAULT_FIGSIZE)
         
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # Vẽ biểu đồ cột
+        bars = ax.bar(
+            range(len(df_plot)),
+            df_plot[CleanColumns.TOC_GIO.value],
+            color=COLOR_WIND,
+            alpha=HISTOGRAM_ALPHA,
+            edgecolor='black',
+            linewidth=1.5
+        )
         
-        # ===== VẼ BIỂU ĐỒ CỘT =====
-        bars = ax.bar(range(len(df_plot)), df_plot['Tốc Gió'], 
-                      color='tab:green', alpha=0.7, edgecolor='black', linewidth=1.5)
-        
-        # ===== TÍNH THỨ TỰ GIÓ =====
-        # Tô màu các thanh dựa trên cường độ
-        colors = ['darkgreen' if x >= 10 else 'orange' if x >= 5 else 'lightgreen' 
-                 for x in df_plot['Tốc Gió']]
+        # Tô màu dựa trên cường độ gió
+        colors = [
+            'darkgreen' if x >= 10 else 'orange' if x >= 5 else 'lightgreen'
+            for x in df_plot[CleanColumns.TOC_GIO.value]
+        ]
         for bar, color in zip(bars, colors):
             bar.set_color(color)
         
-        # ===== TRANG TRÍ =====
-        ax.set_xlabel('Thời Gian (Dự báo 3h/lần)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Tốc Gió (m/s)', fontsize=12, fontweight='bold')
-        ax.set_title(f'💨 Dự báo Tốc Gió (48 giờ) - {city_name_viet}', fontsize=14, fontweight='bold', pad=20)
-        ax.set_xticks(range(len(df_plot)))
-        ax.set_xticklabels([t.strftime('%m/%d %H:%M') for t in df_plot['Thời Gian']], 
-                           rotation=45, ha='right')
-        ax.grid(True, alpha=0.3, axis='y', linestyle='--')
+        # Format labels
+        format_plot_labels(
+            ax,
+            title=f'💨 Dự báo Tốc Gió (48h) - {city_name_viet}',
+            xlabel='Thời Gian (Dự báo 3h/lần)',
+            ylabel='Tốc Gió (m/s)'
+        )
         
-        # ===== THÊM LEGEND =====
-        from matplotlib.patches import Patch
+        # Set x-tick labels
+        ax.set_xticks(range(len(df_plot)))
+        ax.set_xticklabels(
+            [t.strftime('%m/%d %H:%M') for t in df_plot[CleanColumns.THOI_GIAN.value]],
+            rotation=45,
+            ha='right'
+        )
+        
+        # Thêm legend cho mức độ gió
         legend_elements = [
             Patch(facecolor='darkgreen', label='Rất mạnh (≥10 m/s)'),
             Patch(facecolor='orange', label='Mạnh (5-10 m/s)'),
             Patch(facecolor='lightgreen', label='Nhẹ (<5 m/s)')
         ]
-        ax.legend(handles=legend_elements, loc='upper left', fontsize=10)
+        ax.legend(handles=legend_elements, loc='upper left')
         
-        # ===== LƯU FILE =====
-        os.makedirs(os.path.dirname(chart_path), exist_ok=True)
-        plt.tight_layout()
-        plt.savefig(chart_path, dpi=100, bbox_inches='tight')
-        plt.close()
+        # Lưu file
+        setup_tight_layout(fig)
+        save_plot_with_config(fig, chart_path, dpi=DEFAULT_DPI)
         
-        print(f"✅ Đã lưu biểu đồ tốc gió: {chart_path}")
         return chart_path
         
+    except (FileOperationError, ChartGenerationError, EmptyDataFrameError) as e:
+        logger.error(f"Lỗi khi vẽ biểu đồ tốc gió: {e}")
+        plt.close('all')
+        return None
+        
     except Exception as e:
-        print(f"❌ LỖI vẽ biểu đồ tốc gió: {e}")
-        plt.close()
+        log_error(f"Lỗi không xác định khi vẽ biểu đồ tốc gió: {e}", logger, exc_info=True)
+        plt.close('all')
         return None
 
 
@@ -272,12 +436,12 @@ def create_all_charts(city_name_viet: str = DEFAULT_CITY_VIET) -> bool:
         city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
     
     Returns:
-        bool: True nếu vẽ thành công, False nếu thất bại
+        bool: True nếu vẽ thành công tất cả, False nếu có biểu đồ thất bại
     """
     
-    print("\n" + "="*50)
-    print(f"🎨 TRỰC QUAN HÓA DỮ LIỆU THỜI TIẾT - {city_name_viet}")
-    print("="*50 + "\n")
+    logger.info("\n" + "="*50)
+    logger.info(f"🎨 TRỰC QUAN HÓA DỮ LIỆU THỜI TIẾT - {city_name_viet}")
+    logger.info("="*50 + "\n")
     
     results = {
         'Biểu đồ chính': create_weather_chart(city_name_viet),
@@ -285,14 +449,20 @@ def create_all_charts(city_name_viet: str = DEFAULT_CITY_VIET) -> bool:
         'Tốc gió': create_wind_speed_chart(city_name_viet)
     }
     
-    print("\n" + "="*50)
-    print("📊 KẾT QUẢ VẼ BIỂU ĐỒ:")
-    print("="*50)
+    logger.info("\n" + "="*50)
+    logger.info("📊 KẾT QUẢ VẼ BIỂU ĐỒ:")
+    logger.info("="*50)
     for name, path in results.items():
         status = "✅ Thành công" if path else "❌ Thất bại"
-        print(f"{name:20} {status}")
+        logger.info(f"{name:20} {status}")
     
-    return all(v is not None for v in results.values())
+    success = all(v is not None for v in results.values())
+    if success:
+        log_success("Tất cả biểu đồ đã được tạo thành công", logger)
+    else:
+        log_warning("Một số biểu đồ tạo thất bại", logger)
+    
+    return success
 
 
 if __name__ == "__main__":

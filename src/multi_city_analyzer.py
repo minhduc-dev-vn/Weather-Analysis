@@ -17,6 +17,11 @@ import os
 from typing import Dict, List, Optional
 from .config import get_processed_data_path, VIETNAM_CITIES
 from .statistics import calculate_statistics, analyze_trend
+from .logger import get_logger
+
+
+# Logger for module
+logger = get_logger(__name__)
 
 
 def load_multiple_cities_data(city_list: List[str]) -> Dict[str, pd.DataFrame]:
@@ -39,11 +44,11 @@ def load_multiple_cities_data(city_list: List[str]) -> Dict[str, pd.DataFrame]:
                 df = pd.read_csv(processed_path)
                 df['Thời Gian'] = pd.to_datetime(df['Thời Gian'])
                 data_dict[city] = df
-                print(f"✓ Đã load dữ liệu {city}: {len(df)} mốc")
+                logger.info("Đã load dữ liệu %s: %d mốc", city, len(df))
             except Exception as e:
-                print(f"⚠️ Lỗi đọc dữ liệu {city}: {e}")
+                logger.warning("Lỗi đọc dữ liệu %s: %s", city, e)
         else:
-            print(f"⚠️ Không tìm thấy dữ liệu cho {city}")
+            logger.warning("Không tìm thấy dữ liệu cho %s", city)
     
     return data_dict
 
@@ -63,7 +68,7 @@ def compare_cities_statistics(city_list: List[str], metric: str = 'Nhiệt Độ
     data_dict = load_multiple_cities_data(city_list)
     
     if len(data_dict) == 0:
-        print("❌ Không có dữ liệu để so sánh")
+        logger.error("Không có dữ liệu để so sánh")
         return pd.DataFrame()
     
     stats_list = []
@@ -71,7 +76,7 @@ def compare_cities_statistics(city_list: List[str], metric: str = 'Nhiệt Độ
     for city, df in data_dict.items():
         # Validate column exists
         if metric not in df.columns:
-            print(f"⚠️ Cột '{metric}' không tồn tại trong dữ liệu {city}")
+            logger.warning("Cột '%s' không tồn tại trong dữ liệu %s", metric, city)
             continue
         
         stats_list.append({
@@ -85,7 +90,7 @@ def compare_cities_statistics(city_list: List[str], metric: str = 'Nhiệt Độ
         })
     
     if len(stats_list) == 0:
-        print("❌ Không có dữ liệu hợp lệ để tạo thống kê")
+        logger.error("Không có dữ liệu hợp lệ để tạo thống kê")
         return pd.DataFrame()
     
     result_df = pd.DataFrame(stats_list)
@@ -137,33 +142,33 @@ def print_comparison_report(city_list: List[str]) -> None:
         city_list: Danh sách tên thành phố tiếng Việt
     """
     
-    print("\n" + "="*80)
-    print(" "*25 + "📊 BÁO CÁO SO SÁNH THÀNH PHỐ")
-    print("="*80 + "\n")
-    
-    print(f"📍 Các thành phố được so sánh: {', '.join(city_list)}\n")
+    logger.info("%s", "\n" + "="*80)
+    logger.info("%s", " "*25 + "📊 BÁO CÁO SO SÁNH THÀNH PHỐ")
+    logger.info("%s", "="*80 + "\n")
+
+    logger.info("📍 Các thành phố được so sánh: %s\n", ', '.join(city_list))
     
     # So sánh từng metric
     metrics = ['Nhiệt Độ', 'Độ Ẩm', 'Tốc Gió']
     
     for metric in metrics:
-        print(f"\n{'='*80}")
-        print(f"🌡️ SO SÁNH {metric.upper()}")
-        print("="*80)
+        logger.info("%s", "\n" + "="*80)
+        logger.info("🌡️ SO SÁNH %s", metric.upper())
+        logger.info("%s", "="*80)
         
         comparison_df = compare_cities_statistics(city_list, metric)
         if not comparison_df.empty:
-            print(comparison_df.to_string(index=False))
-            
+            logger.info('\n%s', comparison_df.to_string(index=False))
+
             extremes = find_extreme_cities(city_list, metric)
             if extremes:
-                print(f"\n🏆 Thành phố {metric}:")
-                print(f"   • Cao nhất: {extremes['Cao Nhất']}")
-                print(f"   • Thấp nhất: {extremes['Thấp Nhất']}")
+                logger.info('\n🏆 Thành phố %s:', metric)
+                logger.info('   • Cao nhất: %s', extremes['Cao Nhất'])
+                logger.info('   • Thấp nhất: %s', extremes['Thấp Nhất'])
         else:
-            print(f"⚠️ Không có dữ liệu để so sánh {metric}")
+            logger.warning("Không có dữ liệu để so sánh %s", metric)
     
-    print("\n" + "="*80 + "\n")
+    logger.info("%s", "\n" + "="*80 + "\n")
 
 
 def get_city_ranking(city_list: List[str], metric: str = 'Nhiệt Độ') -> pd.DataFrame:
@@ -193,5 +198,8 @@ if __name__ == "__main__":
     # Chạy thử
     cities = ["Hà Nội", "TP. Hồ Chí Minh", "Đà Nẵng"]
     print_comparison_report(cities)
+
+
+
 
 

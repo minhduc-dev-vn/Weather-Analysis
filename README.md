@@ -4,7 +4,7 @@
 
 **Hệ Thống Phân Tích Và Dự Báo Thời Tiết v3.0** là ứng dụng desktop Python với nhiều tính năng nâng cao:
 
-- 🌍 **Hỗ trợ 11 thành phố Việt Nam** (Hà Nội, TP.HCM, Đà Nẵng, Cần Thơ, Nha Trang, Huế, Vũng Tàu, Quy Nhon, Phan Thiet, Đà Lạt, Hạ Long)
+- 🌍 **Hỗ trợ 10 thành phố Việt Nam** (Hà Nội, TP.HCM, Đà Nẵng, Cần Thơ, Nha Trang, Huế, Quy Nhon, Phan Thiet, Đà Lạt, Hạ Long)
 - 📡 **Lấy dữ liệu thời tiết** từ API OpenWeatherMap (5 ngày, cập nhật 3 giờ/lần) với nhiều metric
 - 🧹 **Xử lý và làm sạch dữ liệu** (loại bỏ lỗi, chuẩn hóa định dạng)
 - 📊 **Nhiều loại biểu đồ** (đường, cột, histogram, áp suất, tầm nhìn, độ che phủ mây)
@@ -295,20 +295,6 @@ Thời Gian           Nhiệt Độ  Độ Ẩm  Áp Suất  Tốc Gió  Mô T�
 **Ngày tạo:** 2025-12-27  
 **Trường:** [Trường đại học]  
 **Môn học:** Lập trình Python (IPPA233277)
-
----
-
-## 📄 12. Giấy phép
-
-Dự án này được phát hành dưới giấy phép **MIT License**.
-
----
-
-## 📞 13. Liên hệ hỗ trợ
-
-- 📧 Email: [Email của nhóm]
-- 🐙 GitHub: [Link GitHub]
-- 💬 Issues: [Link Issues trên GitHub]
 
 ---
 

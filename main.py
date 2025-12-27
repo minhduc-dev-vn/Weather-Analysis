@@ -28,6 +28,11 @@ from src.config import (
     VIETNAM_CITIES, DEFAULT_CITY_VIET, 
     get_chart_path, get_processed_data_path
 )
+from src.constants import WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE
+from src.logger import get_logger
+
+# Logger cho ứng dụng GUI
+logger = get_logger('WeatherApp.GUI')
 
 
 class WeatherApp:
@@ -50,9 +55,11 @@ class WeatherApp:
             root: Cửa sổ Tkinter chính
         """
         self.root = root
-        self.root.title("🌦️ Weather Forecast Pro - Hệ Thống Dự Báo Thời Tiết")
-        self.root.geometry("1400x900")
+        self.root.title(WINDOW_TITLE)
+        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
         self.root.resizable(True, True)
+        
+        logger.info("Khởi tạo Weather App GUI")
         
         # Màu sắc chủ đạo
         self.colors = {
