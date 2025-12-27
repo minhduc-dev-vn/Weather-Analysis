@@ -16,10 +16,10 @@ Date: 2025-12-27
 import pandas as pd
 import os
 from typing import Optional
-from .config import RAW_DATA_PATH, PROCESSED_DATA_PATH
+from .config import DEFAULT_CITY_VIET, get_raw_data_path, get_processed_data_path
 
 
-def clean_data() -> Optional[pd.DataFrame]:
+def clean_data(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[pd.DataFrame]:
     """
     Đọc, xử lý và làm sạch dữ liệu thời tiết.
     
@@ -32,6 +32,9 @@ def clean_data() -> Optional[pd.DataFrame]:
     6. Đổi tên cột sang Tiếng Việt
     7. Lưu file sạch
     
+    Args:
+        city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
+    
     Returns:
         Optional[pd.DataFrame]: DataFrame đã xử lý nếu thành công,
                                 None nếu thất bại
@@ -42,31 +45,34 @@ def clean_data() -> Optional[pd.DataFrame]:
         Exception: Các lỗi khác
         
     Examples:
-        >>> df = clean_data()
+        >>> df = clean_data("Hà Nội")
         >>> print(df.columns.tolist())
-        ['Thời Gian', 'Nhiệt Độ', 'Độ Ẩm', 'Áp Suất', 'Tốc Gió', 'Mô Tả']
+        ['Thời Gian', 'Nhiệt Độ', 'Nhiệt Độ Cảm Nhận', 'Độ Ẩm', ...]
     """
     
-    print("🧹 Đang tiến hành làm sạch dữ liệu...")
+    raw_data_path = get_raw_data_path(city_name_viet)
+    processed_data_path = get_processed_data_path(city_name_viet)
+    
+    print(f"🧹 Đang tiến hành làm sạch dữ liệu cho: {city_name_viet}...")
     
     # ===== BƯỚC 1: KIỂM TRA FILE =====
-    if not os.path.exists(RAW_DATA_PATH):
+    if not os.path.exists(raw_data_path):
         print(f"❌ LỖI: Không tìm thấy file dữ liệu thô")
-        print(f"📁 Đường dẫn: {RAW_DATA_PATH}")
+        print(f"📁 Đường dẫn: {raw_data_path}")
         print("💡 Vui lòng chạy cập nhật dữ liệu từ API trước")
         return None
     
     # ===== BƯỚC 2: ĐỌC DỮ LIỆU =====
     try:
-        print(f"📖 Đang đọc file: {RAW_DATA_PATH}")
-        df = pd.read_csv(RAW_DATA_PATH, encoding='utf-8-sig')
+        print(f"📖 Đang đọc file: {raw_data_path}")
+        df = pd.read_csv(raw_data_path, encoding='utf-8-sig')
         print(f"✓ Đã đọc {len(df)} dòng dữ liệu")
         
     except pd.errors.ParserError as e:
         print(f"❌ LỖI: Lỗi đọc file CSV - {e}")
         return None
     except FileNotFoundError:
-        print(f"❌ LỖI: Không tìm thấy file: {RAW_DATA_PATH}")
+        print(f"❌ LỖI: Không tìm thấy file: {raw_data_path}")
         return None
     except Exception as e:
         print(f"❌ LỖI không xác định khi đọc file: {e}")
@@ -74,6 +80,7 @@ def clean_data() -> Optional[pd.DataFrame]:
     
     # ===== BƯỚC 3: KIỂM TRA TRƯỜNG DỮ LIỆU =====
     required_columns = ['dt_txt', 'temp', 'humidity', 'pressure', 'wind_speed', 'description']
+    optional_columns = ['feels_like', 'wind_deg', 'clouds', 'visibility', 'city_name']
     missing_cols = [col for col in required_columns if col not in df.columns]
     
     if missing_cols:
@@ -96,6 +103,16 @@ def clean_data() -> Optional[pd.DataFrame]:
         df['pressure'] = df['pressure'].fillna(df['pressure'].mean())  # Điền giá trị trung bình
         df['wind_speed'] = df['wind_speed'].fillna(0)  # Điền 0 cho tốc gió
         df['description'] = df['description'].fillna('Không xác định')  # Điền văn bản
+        
+        # Xử lý các cột mới (nếu có)
+        if 'feels_like' in df.columns:
+            df['feels_like'] = df['feels_like'].fillna(df['temp'])  # Nếu thiếu thì dùng temp
+        if 'wind_deg' in df.columns:
+            df['wind_deg'] = df['wind_deg'].fillna(df['wind_deg'].median())  # Điền trung vị
+        if 'clouds' in df.columns:
+            df['clouds'] = df['clouds'].fillna(df['clouds'].median())  # Điền trung vị
+        if 'visibility' in df.columns:
+            df['visibility'] = df['visibility'].fillna(df['visibility'].median())  # Điền trung vị
         
         print("✓ Đã xử lý dữ liệu thiếu (điền giá trị hợp lý)")
     else:
@@ -151,18 +168,43 @@ def clean_data() -> Optional[pd.DataFrame]:
     df['humidity'] = df['humidity'].round(0).astype(int)
     df['pressure'] = df['pressure'].round(0).astype(int)
     df['wind_speed'] = df['wind_speed'].round(2)
+    
+    # Làm tròn các cột mới nếu có
+    if 'feels_like' in df.columns:
+        df['feels_like'] = df['feels_like'].round(1)
+    if 'wind_deg' in df.columns:
+        df['wind_deg'] = df['wind_deg'].round(0).astype(int)
+    if 'clouds' in df.columns:
+        df['clouds'] = df['clouds'].round(0).astype(int)
+    if 'visibility' in df.columns:
+        df['visibility'] = df['visibility'].round(2)
+    
     print("✓ Làm tròn hoàn tất")
     
     # ===== BƯỚC 9: ĐỔI TÊN CỘT SANG TIẾNG VIỆT =====
     print("\n🇻🇳 Đổi tên cột sang Tiếng Việt...")
-    df = df.rename(columns={
+    rename_dict = {
         'dt_txt': 'Thời Gian',
         'temp': 'Nhiệt Độ',
         'humidity': 'Độ Ẩm',
         'pressure': 'Áp Suất',
         'wind_speed': 'Tốc Gió',
         'description': 'Mô Tả'
-    })
+    }
+    
+    # Thêm các cột mới vào từ điển đổi tên
+    if 'feels_like' in df.columns:
+        rename_dict['feels_like'] = 'Nhiệt Độ Cảm Nhận'
+    if 'wind_deg' in df.columns:
+        rename_dict['wind_deg'] = 'Hướng Gió'
+    if 'clouds' in df.columns:
+        rename_dict['clouds'] = 'Độ Che Phủ Mây'
+    if 'visibility' in df.columns:
+        rename_dict['visibility'] = 'Tầm Nhìn'
+    if 'city_name' in df.columns:
+        rename_dict['city_name'] = 'Thành Phố'
+    
+    df = df.rename(columns=rename_dict)
     print(f"✓ Tên cột mới: {df.columns.tolist()}")
     
     # ===== BƯỚC 10: KIỂM TRA KÍCH THƯỚC DỮ LIỆU =====
@@ -173,11 +215,11 @@ def clean_data() -> Optional[pd.DataFrame]:
     # ===== BƯỚC 11: LƯU FILE =====
     print(f"\n💾 Lưu file dữ liệu sạch...")
     try:
-        os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
-        df.to_csv(PROCESSED_DATA_PATH, index=False, encoding='utf-8-sig')
+        os.makedirs(os.path.dirname(processed_data_path), exist_ok=True)
+        df.to_csv(processed_data_path, index=False, encoding='utf-8-sig')
         
         print(f"✅ Thành công! Đã lưu dữ liệu sạch")
-        print(f"📁 Vị trí file: {PROCESSED_DATA_PATH}")
+        print(f"📁 Vị trí file: {processed_data_path}")
         print(f"📊 Tổng bản ghi: {len(df)}")
         print(f"💾 Kích thước: {df.memory_usage(deep=True).sum() / 1024:.2f} KB")
         
@@ -201,4 +243,4 @@ def clean_data() -> Optional[pd.DataFrame]:
 
 if __name__ == "__main__":
     # Chạy thử
-    df = clean_data()
+    df = clean_data("Hà Nội")

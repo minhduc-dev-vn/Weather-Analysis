@@ -13,8 +13,8 @@ Date: 2025-12-27
 
 import pandas as pd
 import os
-from typing import Dict, Optional, Tuple
-from .config import PROCESSED_DATA_PATH
+from typing import Dict, Optional, Tuple, Any
+from .config import DEFAULT_CITY_VIET, get_processed_data_path
 
 
 def calculate_statistics(df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
@@ -91,7 +91,7 @@ def analyze_trend(df: pd.DataFrame) -> Dict[str, str]:
     return trends
 
 
-def get_weather_summary(df: pd.DataFrame) -> Dict[str, any]:
+def get_weather_summary(df: pd.DataFrame) -> Dict[str, Any]:
     """
     Tạo tóm tắt thời tiết.
     
@@ -130,26 +130,28 @@ def get_weather_summary(df: pd.DataFrame) -> Dict[str, any]:
     return summary
 
 
-def print_full_statistics(df: Optional[pd.DataFrame] = None) -> None:
+def print_full_statistics(city_name_viet: str = DEFAULT_CITY_VIET, df: Optional[pd.DataFrame] = None) -> None:
     """
     In ra báo cáo thống kê đầy đủ.
     
     Args:
+        city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
         df: DataFrame dữ liệu (nếu None sẽ đọc từ file)
     """
     
     # ===== ĐỌC DỮ LIỆU =====
     if df is None:
-        if not os.path.exists(PROCESSED_DATA_PATH):
-            print("❌ LỖI: Không tìm thấy file dữ liệu sạch")
+        processed_data_path = get_processed_data_path(city_name_viet)
+        if not os.path.exists(processed_data_path):
+            print(f"❌ LỖI: Không tìm thấy file dữ liệu sạch cho {city_name_viet}")
             return
         
-        df = pd.read_csv(PROCESSED_DATA_PATH)
+        df = pd.read_csv(processed_data_path)
         df['Thời Gian'] = pd.to_datetime(df['Thời Gian'])
     
     # ===== TIÊU ĐỀ =====
     print("\n" + "="*70)
-    print(" "*15 + "📊 BÁO CÁO THỐNG KÊ THỜI TIẾT")
+    print(" "*15 + f"📊 BÁO CÁO THỐNG KÊ THỜI TIẾT - {city_name_viet}")
     print("="*70 + "\n")
     
     # ===== TÓMLẶT =====

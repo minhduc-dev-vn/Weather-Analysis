@@ -13,16 +13,21 @@ Date: 2025-12-27
 """
 
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Set backend không tương tác để tránh conflict với threading
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 from typing import Optional
-from .config import PROCESSED_DATA_PATH, CHART_PATH
+from .config import DEFAULT_CITY_VIET, get_processed_data_path, get_chart_path
 
 
-def create_weather_chart() -> Optional[str]:
+def create_weather_chart(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[str]:
     """
     Vẽ biểu đồ kết hợp (Nhiệt độ & Độ ẩm) và lưu thành ảnh PNG.
+    
+    Args:
+        city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
     
     Returns:
         Optional[str]: Đường dẫn file ảnh nếu thành công, None nếu thất bại
@@ -36,17 +41,20 @@ def create_weather_chart() -> Optional[str]:
         - Sử dụng 2 trục Y để so sánh hai đại lượng
     """
     
+    processed_data_path = get_processed_data_path(city_name_viet)
+    chart_path = get_chart_path(city_name_viet, "main")
+    
     # ===== KIỂM TRA FILE =====
-    if not os.path.exists(PROCESSED_DATA_PATH):
-        print("⚠️ Chưa có dữ liệu sạch để vẽ")
+    if not os.path.exists(processed_data_path):
+        print(f"⚠️ Chưa có dữ liệu sạch để vẽ cho {city_name_viet}")
         print("💡 Vui lòng cập nhật dữ liệu từ API trước")
         return None
 
-    print("📊 Đang vẽ biểu đồ thời tiết (Nhiệt độ & Độ ẩm)...")
+    print(f"📊 Đang vẽ biểu đồ thời tiết (Nhiệt độ & Độ ẩm) cho {city_name_viet}...")
     
     try:
         # ===== ĐỌC DỮ LIỆU =====
-        df = pd.read_csv(PROCESSED_DATA_PATH)
+        df = pd.read_csv(processed_data_path)
         
         if len(df) == 0:
             print("❌ LỖI: Dữ liệu trống")
@@ -77,7 +85,7 @@ def create_weather_chart() -> Optional[str]:
         ax2.tick_params(axis='y', labelcolor=color_hum)
         
         # ===== TRANG TRÍ =====
-        plt.title('📊 Dự báo Thời tiết: Nhiệt độ & Độ ẩm (48 giờ)', 
+        plt.title(f'📊 Dự báo Thời tiết: Nhiệt độ & Độ ẩm (48 giờ) - {city_name_viet}', 
                  fontsize=14, fontweight='bold', pad=20)
         
         # Xoay nhãn trục X để dễ đọc
@@ -89,13 +97,13 @@ def create_weather_chart() -> Optional[str]:
         ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
         
         # ===== LƯU FILE =====
-        os.makedirs(os.path.dirname(CHART_PATH), exist_ok=True)
+        os.makedirs(os.path.dirname(chart_path), exist_ok=True)
         plt.tight_layout()
-        plt.savefig(CHART_PATH, dpi=100, bbox_inches='tight')
+        plt.savefig(chart_path, dpi=100, bbox_inches='tight')
         plt.close()
         
-        print(f"✅ Đã lưu biểu đồ: {CHART_PATH}")
-        return CHART_PATH
+        print(f"✅ Đã lưu biểu đồ: {chart_path}")
+        return chart_path
         
     except Exception as e:
         print(f"❌ LỖI vẽ biểu đồ: {e}")
@@ -103,9 +111,12 @@ def create_weather_chart() -> Optional[str]:
         return None
 
 
-def create_temperature_histogram() -> Optional[str]:
+def create_temperature_histogram(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[str]:
     """
     Vẽ histogram phân bố nhiệt độ và lưu thành ảnh.
+    
+    Args:
+        city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
     
     Returns:
         Optional[str]: Đường dẫn file ảnh nếu thành công, None nếu thất bại
@@ -115,14 +126,23 @@ def create_temperature_histogram() -> Optional[str]:
         - Có đường cong Gaussian overlay
     """
     
-    if not os.path.exists(PROCESSED_DATA_PATH):
-        print("⚠️ Chưa có dữ liệu để vẽ histogram")
+    processed_data_path = get_processed_data_path(city_name_viet)
+    chart_path = get_chart_path(city_name_viet, "histogram")
+    
+    if not os.path.exists(processed_data_path):
+        print(f"⚠️ Chưa có dữ liệu để vẽ histogram cho {city_name_viet}")
         return None
 
-    print("📊 Đang vẽ biểu đồ histogram (phân bố nhiệt độ)...")
+    print(f"📊 Đang vẽ biểu đồ histogram (phân bố nhiệt độ) cho {city_name_viet}...")
     
     try:
-        df = pd.read_csv(PROCESSED_DATA_PATH)
+        df = pd.read_csv(processed_data_path)
+        
+        # Validate column
+        if 'Nhiệt Độ' not in df.columns:
+            print(f"❌ Không tìm thấy cột 'Nhiệt Độ'")
+            print(f"   Các cột có sẵn: {df.columns.tolist()}")
+            return None
         
         fig, ax = plt.subplots(figsize=(10, 6))
         
@@ -140,7 +160,7 @@ def create_temperature_histogram() -> Optional[str]:
         # ===== TRANG TRÍ =====
         ax.set_xlabel('Nhiệt Độ (°C)', fontsize=12, fontweight='bold')
         ax.set_ylabel('Số lần xuất hiện', fontsize=12, fontweight='bold')
-        ax.set_title('📈 Phân bố Nhiệt độ', fontsize=14, fontweight='bold', pad=20)
+        ax.set_title(f'📈 Phân bố Nhiệt độ - {city_name_viet}', fontsize=14, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.3, linestyle='--')
         
         # ===== THÊM THỐNG KÊ =====
@@ -152,14 +172,13 @@ def create_temperature_histogram() -> Optional[str]:
         ax.legend(fontsize=10)
         
         # ===== LƯU FILE =====
-        histogram_path = CHART_PATH.replace('.png', '_histogram.png')
-        os.makedirs(os.path.dirname(histogram_path), exist_ok=True)
+        os.makedirs(os.path.dirname(chart_path), exist_ok=True)
         plt.tight_layout()
-        plt.savefig(histogram_path, dpi=100, bbox_inches='tight')
+        plt.savefig(chart_path, dpi=100, bbox_inches='tight')
         plt.close()
         
-        print(f"✅ Đã lưu histogram: {histogram_path}")
-        return histogram_path
+        print(f"✅ Đã lưu histogram: {chart_path}")
+        return chart_path
         
     except Exception as e:
         print(f"❌ LỖI vẽ histogram: {e}")
@@ -167,23 +186,36 @@ def create_temperature_histogram() -> Optional[str]:
         return None
 
 
-def create_wind_speed_chart() -> Optional[str]:
+def create_wind_speed_chart(city_name_viet: str = DEFAULT_CITY_VIET) -> Optional[str]:
     """
     Vẽ biểu đồ tốc gió và lưu thành ảnh.
+    
+    Args:
+        city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
     
     Returns:
         Optional[str]: Đường dẫn file ảnh nếu thành công, None nếu thất bại
     """
     
-    if not os.path.exists(PROCESSED_DATA_PATH):
-        print("⚠️ Chưa có dữ liệu để vẽ biểu đồ tốc gió")
+    processed_data_path = get_processed_data_path(city_name_viet)
+    chart_path = get_chart_path(city_name_viet, "wind")
+    
+    if not os.path.exists(processed_data_path):
+        print(f"⚠️ Chưa có dữ liệu để vẽ biểu đồ tốc gió cho {city_name_viet}")
         return None
 
-    print("📊 Đang vẽ biểu đồ tốc gió...")
+    print(f"📊 Đang vẽ biểu đồ tốc gió cho {city_name_viet}...")
     
     try:
-        df = pd.read_csv(PROCESSED_DATA_PATH)
+        df = pd.read_csv(processed_data_path)
         df['Thời Gian'] = pd.to_datetime(df['Thời Gian'])
+        
+        # Validate column
+        if 'Tốc Gió' not in df.columns:
+            print(f"❌ Không tìm thấy cột 'Tốc Gió'")
+            print(f"   Các cột có sẵn: {df.columns.tolist()}")
+            return None
+        
         df_plot = df.head(12)
         
         fig, ax = plt.subplots(figsize=(12, 6))
@@ -202,7 +234,7 @@ def create_wind_speed_chart() -> Optional[str]:
         # ===== TRANG TRÍ =====
         ax.set_xlabel('Thời Gian (Dự báo 3h/lần)', fontsize=12, fontweight='bold')
         ax.set_ylabel('Tốc Gió (m/s)', fontsize=12, fontweight='bold')
-        ax.set_title('💨 Dự báo Tốc Gió (48 giờ)', fontsize=14, fontweight='bold', pad=20)
+        ax.set_title(f'💨 Dự báo Tốc Gió (48 giờ) - {city_name_viet}', fontsize=14, fontweight='bold', pad=20)
         ax.set_xticks(range(len(df_plot)))
         ax.set_xticklabels([t.strftime('%m/%d %H:%M') for t in df_plot['Thời Gian']], 
                            rotation=45, ha='right')
@@ -218,14 +250,13 @@ def create_wind_speed_chart() -> Optional[str]:
         ax.legend(handles=legend_elements, loc='upper left', fontsize=10)
         
         # ===== LƯU FILE =====
-        wind_path = CHART_PATH.replace('.png', '_wind.png')
-        os.makedirs(os.path.dirname(wind_path), exist_ok=True)
+        os.makedirs(os.path.dirname(chart_path), exist_ok=True)
         plt.tight_layout()
-        plt.savefig(wind_path, dpi=100, bbox_inches='tight')
+        plt.savefig(chart_path, dpi=100, bbox_inches='tight')
         plt.close()
         
-        print(f"✅ Đã lưu biểu đồ tốc gió: {wind_path}")
-        return wind_path
+        print(f"✅ Đã lưu biểu đồ tốc gió: {chart_path}")
+        return chart_path
         
     except Exception as e:
         print(f"❌ LỖI vẽ biểu đồ tốc gió: {e}")
@@ -233,22 +264,25 @@ def create_wind_speed_chart() -> Optional[str]:
         return None
 
 
-def create_all_charts() -> bool:
+def create_all_charts(city_name_viet: str = DEFAULT_CITY_VIET) -> bool:
     """
     Vẽ tất cả các biểu đồ (kết hợp, histogram, tốc gió).
+    
+    Args:
+        city_name_viet: Tên thành phố tiếng Việt (mặc định: "Hà Nội")
     
     Returns:
         bool: True nếu vẽ thành công, False nếu thất bại
     """
     
     print("\n" + "="*50)
-    print("🎨 TRỰC QUAN HÓA DỮ LIỆU THỜI TIẾT")
+    print(f"🎨 TRỰC QUAN HÓA DỮ LIỆU THỜI TIẾT - {city_name_viet}")
     print("="*50 + "\n")
     
     results = {
-        'Biểu đồ chính': create_weather_chart(),
-        'Histogram': create_temperature_histogram(),
-        'Tốc gió': create_wind_speed_chart()
+        'Biểu đồ chính': create_weather_chart(city_name_viet),
+        'Histogram': create_temperature_histogram(city_name_viet),
+        'Tốc gió': create_wind_speed_chart(city_name_viet)
     }
     
     print("\n" + "="*50)

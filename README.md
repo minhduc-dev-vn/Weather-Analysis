@@ -2,12 +2,15 @@
 
 ## 📌 1. Giới thiệu dự án
 
-**Hệ Thống Phân Tích Và Dự Báo Thời Tiết** là ứng dụng desktop Python giúp người dùng:
-- 📡 **Lấy dữ liệu thời tiết** từ API OpenWeatherMap trong thời gian thực (5 ngày, cập nhật 3 giờ/lần)
+**Hệ Thống Phân Tích Và Dự Báo Thời Tiết v3.0** là ứng dụng desktop Python với nhiều tính năng nâng cao:
+
+- 🌍 **Hỗ trợ 11 thành phố Việt Nam** (Hà Nội, TP.HCM, Đà Nẵng, Cần Thơ, Nha Trang, Huế, Vũng Tàu, Quy Nhon, Phan Thiet, Đà Lạt, Hạ Long)
+- 📡 **Lấy dữ liệu thời tiết** từ API OpenWeatherMap (5 ngày, cập nhật 3 giờ/lần) với nhiều metric
 - 🧹 **Xử lý và làm sạch dữ liệu** (loại bỏ lỗi, chuẩn hóa định dạng)
-- 📊 **Trực quan hóa dữ liệu** qua các biểu đồ chi tiết (đường, cột, histogram)
-- 📈 **Phân tích thống kê** (trung bình, độ lệch chuẩn, xu hướng)
-- 🖥️ **Giao diện thân thiện** (GUI Tkinter) dễ sử dụng
+- 📊 **Nhiều loại biểu đồ** (đường, cột, histogram, áp suất, tầm nhìn, độ che phủ mây)
+- 📈 **Phân tích thống kê** chi tiết (trung bình, độ lệch chuẩn, xu hướng)
+- 🔀 **So sánh nhiều thành phố** cùng lúc
+- 🖥️ **Giao diện hiện đại** với tabbed interface, dễ sử dụng
 
 **Mục đích:** Giúp người dùng hiểu và dự báo xu hướng thời tiết trong tương lai gần.
 
@@ -27,9 +30,13 @@
 |-----|---------|---------|-------|--------|
 | `dt_txt` | Thời Gian | DateTime | Thời điểm dự báo | YYYY-MM-DD HH:MM:SS |
 | `temp` | Nhiệt Độ | Float | Nhiệt độ không khí | °C (Celsius) |
+| `feels_like` | Nhiệt Độ Cảm Nhận | Float | Nhiệt độ cảm nhận | °C (Celsius) |
 | `humidity` | Độ Ẩm | Integer | Độ ẩm không khí | % (0-100) |
 | `pressure` | Áp Suất | Integer | Áp suất khí quyển | hPa (hectoPascal) |
 | `wind_speed` | Tốc Gió | Float | Tốc độ gió ngang | m/s (mét/giây) |
+| `wind_deg` | Hướng Gió | Integer | Hướng gió | 0-360 độ |
+| `clouds` | Độ Che Phủ Mây | Integer | Độ che phủ mây | % (0-100) |
+| `visibility` | Tầm Nhìn | Float | Tầm nhìn | km |
 | `description` | Mô Tả | String | Mô tả điều kiện thời tiết | Text (mưa, nắng, mây, v.v.) |
 
 ### Hạn chế và khiếm khuyết
@@ -83,13 +90,23 @@ pip install -r requirements.txt
 Mở file `src/config.py` và thay thế:
 ```python
 API_KEY = "YOUR_API_KEY_HERE"  # Dán API Key của bạn vào đây
-CITY_NAME = "Hanoi"             # Đổi thành thành phố bạn muốn
 ```
 
+**Lưu ý:** Bạn có thể chọn thành phố trực tiếp trong giao diện, không cần chỉnh trong config.
+
 #### 6. Chạy ứng dụng
+
 ```bash
+# Kích hoạt virtual environment
+venv\Scripts\activate  # Windows
+# hoặc
+source venv/bin/activate  # macOS/Linux
+
+# Chạy chương trình
 python main.py
 ```
+
+Sau khi chạy, cửa sổ GUI sẽ hiện ra.
 
 ---
 
@@ -101,26 +118,25 @@ Weather_Forecast_Pro/
 ├── main.py                    # Ứng dụng GUI chính
 ├── requirements.txt           # Danh sách thư viện phụ thuộc
 ├── README.md                  # Tài liệu này
+├── CHANGELOG.md               # Lịch sử thay đổi
+├── WORK_DISTRIBUTION.md       # Phân công công việc
 │
 ├── src/                       # Mã nguồn chính
 │   ├── __init__.py
-│   ├── config.py             # Cấu hình (API Key, đường dẫn)
-│   ├── data_loader.py        # Lấy dữ liệu từ API
+│   ├── config.py             # Cấu hình (API Key, danh sách thành phố)
+│   ├── data_loader.py        # Lấy dữ liệu từ API (nhiều thành phố)
 │   ├── data_cleaner.py       # Xử lý & làm sạch dữ liệu
-│   ├── visualizer.py         # Vẽ biểu đồ
-│   └── statistics.py         # Phân tích thống kê (mới)
+│   ├── visualizer.py         # Vẽ biểu đồ cơ bản
+│   ├── visualizer_advanced.py # Vẽ biểu đồ nâng cao (heatmap, boxplot, ...)
+│   ├── statistics.py         # Phân tích thống kê
+│   └── multi_city_analyzer.py # Phân tích so sánh nhiều thành phố
 │
-├── data/                      # Lưu trữ dữ liệu
-│   ├── raw/                  # Dữ liệu thô từ API
-│   │   └── weather_raw.csv
-│   └── processed/            # Dữ liệu đã xử lý
-│       └── weather_clean.csv
+├── data/                      # Lưu trữ dữ liệu (tự động tạo)
+│   ├── raw/                  # Dữ liệu thô từ API (theo thành phố)
+│   └── processed/            # Dữ liệu đã xử lý (theo thành phố)
 │
-├── assets/                    # Lưu trữ ảnh/biểu đồ
-│   └── weather_chart.png
-│
-└── logs/                      # Lưu trữ log (mới)
-    └── app.log
+└── assets/                    # Lưu trữ ảnh/biểu đồ (tự động tạo)
+    └── (các file biểu đồ được tạo tự động)
 ```
 
 ---
@@ -161,26 +177,40 @@ Weather_Forecast_Pro/
 
 ### Các tính năng chính
 
-#### 1️⃣ Cập nhật dữ liệu
-- Nhấn nút "🔄 Cập Nhật Dữ Liệu Mới Nhất"
+#### 1️⃣ Chọn thành phố và cập nhật dữ liệu
+- Chọn thành phố từ **dropdown** ở trên cùng
+- Nhấn nút **"🔄 Cập Nhật Dữ Liệu"**
 - Hệ thống sẽ:
   - Kết nối API OpenWeatherMap
-  - Lấy dữ liệu thời tiết 5 ngày
-  - Lưu file CSV thô
+  - Lấy dữ liệu thời tiết 5 ngày cho thành phố đã chọn
+  - Lưu file CSV thô (theo tên thành phố)
   - Xử lý & làm sạch dữ liệu
-  - Vẽ biểu đồ
+  - Vẽ tất cả biểu đồ
   - Hiển thị kết quả
 
 #### 2️⃣ Xem biểu đồ
-- Biểu đồ sẽ tự động hiển thị sau khi cập nhật
-- Các loại biểu đồ:
-  - **Nhiệt độ & Độ ẩm:** Đường + Cột
-  - **Phân bố nhiệt độ:** Histogram
-  - **Tốc gió:** Biểu đồ cột
+**Tab 1: Biểu Đồ Chính**
+- Biểu đồ nhiệt độ & độ ẩm
+- Histogram phân bố nhiệt độ
+- Biểu đồ tốc gió
 
-#### 3️⃣ Xem dữ liệu thô
-- File CSV thô: `data/raw/weather_raw.csv`
-- File CSV đã xử lý: `data/processed/weather_clean.csv`
+**Tab 2: Biểu Đồ Nâng Cao**
+- Biểu đồ áp suất (riêng biệt với đường trung bình)
+- Biểu đồ tầm nhìn (với màu sắc phân loại chất lượng)
+- Biểu đồ độ che phủ mây
+
+**Tab 3: So Sánh Thành Phố**
+- So sánh nhiều thành phố cùng lúc
+- Boxplot phân bố
+- Nhập: `Hà Nội, TP. Hồ Chí Minh, Đà Nẵng`
+
+**Tab 4: Thống Kê**
+- Thống kê chi tiết cho thành phố đã chọn
+- Bấm "🔄 Làm Mới Thống Kê" để cập nhật
+
+#### 3️⃣ Xem dữ liệu
+- File CSV thô: `data/raw/weather_raw_[TênThànhPhố].csv`
+- File CSV đã xử lý: `data/processed/weather_clean_[TênThànhPhố].csv`
 
 ---
 
@@ -188,12 +218,13 @@ Weather_Forecast_Pro/
 
 | Thư viện | Phiên bản | Công dụng |
 |---------|---------|---------|
-| **requests** | ≥2.25.0 | Gửi HTTP request tới API |
-| **pandas** | ≥1.1.0 | Xử lý & phân tích dữ liệu |
-| **matplotlib** | ≥3.3.0 | Vẽ biểu đồ & trực quan hóa |
-| **numpy** | ≥1.19.0 | Tính toán số học (qua pandas) |
+| **requests** | ≥2.28.0 | Gửi HTTP request tới API |
+| **pandas** | ≥1.5.0 | Xử lý & phân tích dữ liệu |
+| **matplotlib** | ≥3.6.0 | Vẽ biểu đồ & trực quan hóa |
+| **numpy** | ≥1.23.0 | Tính toán số học |
+| **seaborn** | ≥0.12.0 | Vẽ heatmap và biểu đồ nâng cao |
+| **Pillow** | ≥9.0.0 | Xử lý ảnh trong GUI |
 | **tkinter** | Built-in | Tạo giao diện GUI |
-| **PIL** | ≥8.0.0 | Xử lý ảnh |
 
 ---
 
@@ -211,6 +242,9 @@ Thời Gian           Nhiệt Độ  Độ Ẩm  Áp Suất  Tốc Gió  Mô T�
 - ✅ Biểu đồ kết hợp (Nhiệt độ & Độ ẩm)
 - ✅ Histogram phân bố nhiệt độ
 - ✅ Biểu đồ tốc gió
+- ✅ Biểu đồ áp suất (riêng biệt)
+- ✅ Biểu đồ tầm nhìn (riêng biệt với màu sắc phân loại)
+- ✅ Biểu đồ độ che phủ mây
 
 ### Phân tích thống kê
 - ✅ Nhiệt độ trung bình, cao nhất, thấp nhất
@@ -232,11 +266,21 @@ Thời Gian           Nhiệt Độ  Độ Ẩm  Áp Suất  Tốc Gió  Mô T�
 
 ---
 
-## 📝 9. Phát triển tiếp theo
+## 📝 9. Tính năng mới trong v3.0
+
+- ✅ Hỗ trợ 11 thành phố Việt Nam
+- ✅ So sánh nhiều thành phố cùng lúc  
+- ✅ Biểu đồ áp suất và tầm nhìn riêng biệt, dễ hiểu hơn
+- ✅ Giao diện đơn giản hóa, tập trung vào biểu đồ quan trọng
+- ✅ Dữ liệu phong phú hơn (feels_like, visibility, clouds, wind_deg)
+- ✅ Giao diện tabbed interface hiện đại
+- ✅ Lưu trữ dữ liệu riêng biệt cho mỗi thành phố
+- ✅ Fix lỗi threading khi cập nhật nhiều thành phố
+
+## 📝 10. Phát triển tiếp theo
 
 - [ ] Thêm dự báo dài hạn (14 ngày)
 - [ ] Lưu lịch sử dữ liệu dài hạn
-- [ ] So sánh giữa các thành phố
 - [ ] Thông báo cảnh báo thời tiết nguy hiểm
 - [ ] Xuất báo cáo PDF
 - [ ] Đồng bộ dữ liệu với cơ sở dữ liệu
@@ -245,7 +289,7 @@ Thời Gian           Nhiệt Độ  Độ Ẩm  Áp Suất  Tốc Gió  Mô T�
 
 ---
 
-## 👥 10. Thông tin đóng góp
+## 👥 11. Thông tin đóng góp
 
 **Tác giả:** Nhóm [Tên nhóm]  
 **Ngày tạo:** 2025-12-27  
@@ -254,13 +298,13 @@ Thời Gian           Nhiệt Độ  Độ Ẩm  Áp Suất  Tốc Gió  Mô T�
 
 ---
 
-## 📄 11. Giấy phép
+## 📄 12. Giấy phép
 
 Dự án này được phát hành dưới giấy phép **MIT License**.
 
 ---
 
-## 📞 12. Liên hệ hỗ trợ
+## 📞 13. Liên hệ hỗ trợ
 
 - 📧 Email: [Email của nhóm]
 - 🐙 GitHub: [Link GitHub]
