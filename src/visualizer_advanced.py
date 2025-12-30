@@ -54,7 +54,7 @@ def create_comparison_chart(city_list: List[str], metric: str = 'Nhiệt Độ')
         
         for idx, city in enumerate(city_list):
             processed_path = get_processed_data_path(city)
-                if not os.path.exists(processed_path):
+            if not os.path.exists(processed_path):
                 logger.warning(f"Không tìm thấy dữ liệu cho {city}")
                 continue
             
